@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import { validationResult } from 'express-validator'
-import { Precio, Categoria, Propiedad, Mensaje} from '../models/index.js'
-import { esVendedor } from '../helpers/index.js'
+import { Precio, Categoria, Propiedad, Mensaje, Usuario} from '../models/index.js'
+import { esVendedor, formatearFecha } from '../helpers/index.js'
 
 const admin = async (req, res) =>{
 
@@ -19,7 +19,7 @@ const admin = async (req, res) =>{
         const { id } = req.usuario
 
         // Limites y Offset para el paginador 
-        const limit = 5;
+        const limit = 10;
         const offset = ((paginaActual * limit) - limit)  // igual que un skip
 
         const [propiedades, total] = await Promise.all([
@@ -31,7 +31,8 @@ const admin = async (req, res) =>{
                 },
                 include: [
                     { model: Categoria, as: 'categoria' },
-                    { model: Precio, as: 'precio' }
+                    { model: Precio, as: 'precio' },
+                    { model: Mensaje, as: 'mensajes' }
                 ]
             }),
             Propiedad.count({
@@ -392,6 +393,38 @@ const enviarMensaje = async (req, res) =>{
 
 }
 
+// Leer mensajes recibidos
+const verMensajes = async (req, res) => {
+
+    const { id } = req.params
+
+    // Validar que la propiedad existe
+    const propiedad = await Propiedad.findByPk(id, {
+        include: [
+            { model: Mensaje, as: 'mensajes', 
+                include:[
+                    {model: Usuario.scope('eliminarPassword'), as: 'usuario'}
+                ]
+             }
+        ]
+    })
+
+    if( !propiedad ){
+        return res.redirect('/mis-propiedades')
+    }
+
+    // Validar que la propiedad pertenece a quien visite esta pagina
+    if(req.usuario.id.toString() !== propiedad.usuarioId.toString()){
+        return res.redirect('/mis-propiedades')
+    }
+
+    res.render('propiedades/mensajes',{
+        pagina:'Mensajes',
+        mensajes: propiedad.mensajes,
+        formatearFecha
+    })
+}
+
 export{
     admin,
     crear,
@@ -402,5 +435,6 @@ export{
     guardarCambios,
     eliminar,
     mostrarPropiedad,
-    enviarMensaje
+    enviarMensaje,
+    verMensajes
 }
